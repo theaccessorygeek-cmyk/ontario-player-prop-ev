@@ -1,0 +1,22 @@
+[
+{
+"sport": "NBA",
+"event": "Example Team A vs Example Team B",
+"start_time": "2026-11-14T19:30:00-05:00",
+"player": "Example Player",
+"market": "points",
+"line": 24.5,
+"operator": "FanDuel",
+"ontario_authorized_checked": false,
+"ontario_available": false,
+"status": "closed",
+"over_american": -110,
+"under_american": -110,
+"observed_at": "2026-11-14T09:15:00-05:00",
+"source_url": "https://example.com/replace-with-real-market-page",
+"model_probability": 0.56,
+"observations": 25,
+"push_probability": 0.0,
+"notes": "EXAMPLE ONLY. Replace with real verified information."
+}
+]
