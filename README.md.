@@ -1,0 +1,37 @@
+Ontario Player-Prop EV Report
+
+A research-only player-prop expected-value system for an Ontario bettor.
+
+What it does
+
+- Evaluates player-prop odds using American odds.
+- Calculates decimal odds and implied probabilities.
+- Removes the bookmaker margin using two-sided prices.
+- Calculates expected value per C$1.
+- Rejects stale, incomplete or unverified quotes.
+- Requires at least 20 relevant observations.
+- Requires a minimum 5-percentage-point edge over the no-vig market probability.
+- Produces a daily Markdown report.
+- Never places bets.
+
+Important data limitation
+
+This starter does not have a verified live Ontario sportsbook odds feed. It will not invent prices or assume that US sportsbook prices are available in Ontario.
+
+Only use current quotes that you have independently checked at an Ontario-authorized sportsbook. Both over and under prices are required.
+
+Requirements
+
+Python 3.11 or newer. No paid software or third-party Python packages are required.
+
+Run
+
+Copy "data/quotes.example.json" to "data/quotes.json", enter verified quote information, and run:
+
+python -m src.main
+
+The report will appear in "reports/latest.md".
+
+Safety rules
+
+A missing or unverified price is not a betting opportunity. If no candidate passes all checks, the report will say NO QUALIFYING BETS and recommend C$0 exposure.
