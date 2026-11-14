@@ -60,6 +60,10 @@ jobs:
       - name: Classify collected prop data
         if: steps.schedule.outputs.run_report == 'true'
         run: python -m src.classify_snapshot
+        
+      - name: Audit Ontario operator candidates
+        if: steps.schedule.outputs.run_report == 'true'
+        run: python -m src.audit_ontario_candidates
 
       - name: Generate report
         if: steps.schedule.outputs.run_report == 'true'
@@ -73,4 +77,6 @@ jobs:
           path: |
             reports/latest.md
             reports/props_snapshot.json
+            reports/classification.md
+            reports/ontario_candidate_audit.md
             
