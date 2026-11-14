@@ -1,0 +1,11 @@
+README.md
+requirements.txt
+.gitignore
+config/books.json
+data/quotes.example.json
+src/__init__.py
+src/ev.py
+src/validation.py
+src/main.py
+tests/test_ev.py
+.github/workflows/daily-report.yml
