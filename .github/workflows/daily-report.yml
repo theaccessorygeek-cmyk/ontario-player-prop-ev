@@ -47,14 +47,22 @@ jobs:
           print("Generate report:", should_run)
           PY
 
+      - name: Collect reference player props
+        if: steps.schedule.outputs.run_report == 'true'
+        env:
+          PARLAY_API_KEY: ${{ secrets.PARLAY_API_KEY }}
+        run: python -m src.collect_props
+
       - name: Generate report
         if: steps.schedule.outputs.run_report == 'true'
         run: python -m src.main
 
-      - name: Save report
+      - name: Save report and data snapshot
         if: steps.schedule.outputs.run_report == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: daily-ontario-ev-report
-          path: reports/latest.md
-          
+          path: |
+            reports/latest.md
+            reports/props_snapshot.json
+            
