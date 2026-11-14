@@ -59,7 +59,7 @@ jobs:
 
       - name: Save report and data snapshot
         if: steps.schedule.outputs.run_report == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: daily-ontario-ev-report
           path: |
