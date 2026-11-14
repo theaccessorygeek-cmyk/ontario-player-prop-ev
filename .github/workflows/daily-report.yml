@@ -52,6 +52,10 @@ jobs:
         env:
           PARLAY_API_KEY: ${{ secrets.PARLAY_API_KEY }}
         run: python -m src.collect_props
+        
+      - name: Audit collected reference data
+        if: steps.schedule.outputs.run_report == 'true'
+        run: python -m src.audit_snapshot
 
       - name: Generate report
         if: steps.schedule.outputs.run_report == 'true'
