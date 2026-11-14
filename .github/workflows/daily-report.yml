@@ -1,0 +1,60 @@
+
+name: Daily Ontario EV Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run calculation tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check Toronto reporting time
+        id: schedule
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          now = datetime.now(ZoneInfo("America/Toronto"))
+
+          manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+          scheduled = now.hour == 9 and 30 <= now.minute <= 34
+
+          should_run = manual or scheduled
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"run_report={'true' if should_run else 'false'}\n")
+
+          print("Toronto time:", now.isoformat())
+          print("Generate report:", should_run)
+          PY
+
+      - name: Generate report
+        if: steps.schedule.outputs.run_report == 'true'
+        run: python -m src.main
+
+      - name: Save report
+        if: steps.schedule.outputs.run_report == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-ontario-ev-report
+          path: reports/latest.md
+          
