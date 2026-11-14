@@ -56,6 +56,10 @@ jobs:
       - name: Audit collected reference data
         if: steps.schedule.outputs.run_report == 'true'
         run: python -m src.audit_snapshot
+        
+      - name: Classify collected prop data
+        if: steps.schedule.outputs.run_report == 'true'
+        run: python -m src.classify_snapshot
 
       - name: Generate report
         if: steps.schedule.outputs.run_report == 'true'
