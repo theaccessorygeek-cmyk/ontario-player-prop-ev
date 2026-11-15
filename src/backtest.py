@@ -1,134 +1,165 @@
+"""Chronological walk-forward backtesting for player props."""
 
-"""Historical player-prop probability estimates.
-
-This is a transparent empirical baseline, not a complete predictive model.
-Observations must be ordered oldest to newest.
-"""
-
+import argparse
+import csv
+import json
 import math
+from collections import defaultdict
+from datetime import date
+
+from src.projections import estimate_probabilities
 
 
-DEFAULT_HALF_LIFE = 10
-DEFAULT_PRIOR_STRENGTH = 8
-MIN_OBSERVATIONS = 20
+CLASSES = ("over", "under", "push")
+EPSILON = 1e-15
 
 
-def estimate_probabilities(
-    observations,
-    line,
-    half_life=DEFAULT_HALF_LIFE,
-    prior_strength=DEFAULT_PRIOR_STRENGTH,
-    min_observations=MIN_OBSERVATIONS,
-):
-    """Estimate over, under and push probabilities from game logs."""
+def load_rows(path):
+    """Load historical player results from a CSV file."""
+    with open(path, newline="", encoding="utf-8") as file:
+        return list(csv.DictReader(file))
 
-    if not isinstance(observations, list):
-        raise ValueError("Observations must be a list")
 
-    if len(observations) < min_observations:
-        raise ValueError(
-            f"At least {min_observations} observations are required"
+def run_backtest(rows, min_observations=20):
+    """Evaluate predictions using only earlier games for each player/market."""
+
+    if not isinstance(rows, list):
+        raise ValueError("Rows must be a list")
+
+    groups = defaultdict(list)
+
+    for row in rows:
+        try:
+            game_date = date.fromisoformat(row["date"])
+            player = str(row["player"]).strip()
+            market = str(row["market"]).strip()
+            line = float(row["line"])
+            actual = float(row["actual"])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("Each row needs valid date, player, market, line and actual fields")
+
+        if not player or not market:
+            raise ValueError("Player and market cannot be blank")
+
+        if not math.isfinite(line) or not math.isfinite(actual):
+            raise ValueError("Line and actual must be finite numbers")
+
+        groups[(player, market)].append(
+            (game_date, line, actual)
         )
 
-    if not math.isfinite(float(line)):
-        raise ValueError("Line must be finite")
+    predictions = []
+    skipped = 0
 
-    if half_life <= 0 or prior_strength < 0:
-        raise ValueError("Invalid model settings")
+    for key, games in groups.items():
+        games.sort(key=lambda item: item[0])
 
-    values = []
+        dates = [game[0] for game in games]
+        if len(dates) != len(set(dates)):
+            raise ValueError(
+                f"Duplicate dates found for {key[0]} / {key[1]}"
+            )
 
-    for value in observations:
-        if isinstance(value, bool):
-            raise ValueError("Observations must be numeric")
+        history = []
 
-        try:
-            number = float(value)
-        except (TypeError, ValueError):
-            raise ValueError("Observations must be numeric")
+        for game_date, line, actual in games:
+            if len(history) < min_observations:
+                skipped += 1
+                history.append(actual)
+                continue
 
-        if not math.isfinite(number):
-            raise ValueError("Observations must be finite")
+            estimate = estimate_probabilities(
+                history,
+                line,
+                min_observations=min_observations,
+            )
 
-        values.append(number)
+            if actual > line:
+                outcome = "over"
+            elif actual < line:
+                outcome = "under"
+            else:
+                outcome = "push"
 
-    line = float(line)
-    weights = [
-        0.5 ** ((len(values) - 1 - index) / half_life)
-        for index in range(len(values))
-    ]
+            predictions.append({
+                "date": game_date.isoformat(),
+                "player": key[0],
+                "market": key[1],
+                "line": line,
+                "actual": actual,
+                "outcome": outcome,
+                "probabilities": {
+                    "over": estimate["model_over_probability"],
+                    "under": estimate["model_under_probability"],
+                    "push": estimate["model_push_probability"],
+                },
+                "history_games": len(history),
+                "effective_sample_size": estimate["effective_sample_size"],
+            })
 
-    over_weight = 0.0
-    under_weight = 0.0
-    push_weight = 0.0
-    weighted_total = 0.0
-    weight_squared_total = 0.0
-    weighted_value_total = 0.0
+            # Add this game's result only after making its prediction.
+            history.append(actual)
 
-    raw_over = 0
-    raw_under = 0
-    raw_push = 0
+    if not predictions:
+        return {
+            "predictions": [],
+            "metrics": None,
+            "evaluated": 0,
+            "skipped": skipped,
+            "message": "Not enough historical data to evaluate predictions.",
+        }
 
-    for value, weight in zip(values, weights):
-        weighted_total += weight
-        weight_squared_total += weight * weight
-        weighted_value_total += value * weight
+    brier_total = 0.0
+    log_loss_total = 0.0
+    correct = 0
 
-        if value > line:
-            over_weight += weight
-            raw_over += 1
-        elif value < line:
-            under_weight += weight
-            raw_under += 1
-        else:
-            push_weight += weight
-            raw_push += 1
+    for prediction in predictions:
+        probabilities = prediction["probabilities"]
+        actual_class = prediction["outcome"]
 
-    decisive_weight = over_weight + under_weight
+        brier_total += sum(
+            (probabilities[name] - (1.0 if name == actual_class else 0.0)) ** 2
+            for name in CLASSES
+        )
 
-    push_probability = (
-        push_weight / weighted_total
-        if weighted_total else 0.0
-    )
+        log_loss_total -= math.log(
+            max(probabilities[actual_class], EPSILON)
+        )
 
-    if decisive_weight:
-        smoothed_over_share = (
-            over_weight + prior_strength * 0.5
-        ) / (decisive_weight + prior_strength)
-    else:
-        smoothed_over_share = 0.5
+        predicted_class = max(
+            CLASSES, key=lambda name: probabilities[name]
+        )
 
-    model_over = (
-        (1 - push_probability) * smoothed_over_share
-    )
-    model_under = (
-        (1 - push_probability) * (1 - smoothed_over_share)
-    )
+        if predicted_class == actual_class:
+            correct += 1
 
-    effective_sample_size = (
-        weighted_total ** 2 / weight_squared_total
-        if weight_squared_total else 0.0
-    )
+    count = len(predictions)
 
     return {
-        "model_over_probability": model_over,
-        "model_under_probability": model_under,
-        "model_push_probability": push_probability,
-        "weighted_average": weighted_value_total / weighted_total,
-        "observations": len(values),
-        "effective_sample_size": effective_sample_size,
-        "raw_over": raw_over,
-        "raw_under": raw_under,
-        "raw_push": raw_push,
-        "method": "recency_weighted_empirical_with_beta_shrinkage",
-        "half_life_games": half_life,
-        "prior_strength": prior_strength,
-        "limitations": [
-            "Historical baseline only",
-            "No injury or lineup adjustment",
-            "No minutes or playing-time projection",
-            "No opponent or matchup adjustment",
-            "Not independently validated for betting use",
-        ],
+        "predictions": predictions,
+        "metrics": {
+            "brier_score": brier_total / count,
+            "log_loss": log_loss_total / count,
+            "accuracy": correct / count,
+        },
+        "evaluated": count,
+        "skipped": skipped,
+        "message": "Walk-forward evaluation complete.",
     }
-  
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "csv_file",
+        help="CSV file with date,player,market,line,actual columns",
+    )
+    args = parser.parse_args()
+
+    result = run_backtest(load_rows(args.csv_file))
+
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
