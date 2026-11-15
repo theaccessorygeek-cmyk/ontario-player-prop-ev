@@ -53,6 +53,12 @@ jobs:
           PARLAY_API_KEY: ${{ secrets.PARLAY_API_KEY }}
         run: python -m src.collect_props
         
+      - name: Collect one budget-capped targeted board
+        if: steps.schedule.outputs.run_report == 'true'
+        env:
+          PARLAY_API_KEY: ${{ secrets.PARLAY_API_KEY }}
+        run: python -m src.targeted_collection
+        
       - name: Audit collected reference data
         if: steps.schedule.outputs.run_report == 'true'
         run: python -m src.audit_snapshot
@@ -79,4 +85,5 @@ jobs:
             reports/props_snapshot.json
             reports/classification.md
             reports/ontario_candidate_audit.md
+                        reports/targeted_collection.md
             
