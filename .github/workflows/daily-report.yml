@@ -85,5 +85,5 @@ jobs:
             reports/props_snapshot.json
             reports/classification.md
             reports/ontario_candidate_audit.md
-                        reports/targeted_collection.md
+            reports/targeted_collection.md
             
