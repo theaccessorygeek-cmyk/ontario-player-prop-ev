@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.backtest import run_backtest
 
@@ -7,11 +7,13 @@ from src.backtest import run_backtest
 class TestWalkForwardBacktest(unittest.TestCase):
 
     def setUp(self):
-        start = date(2025, 1, 1)
+        start = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
         self.rows = [
             {
-                "date": (start + timedelta(days=i)).isoformat(),
+                "game_datetime": (
+                    start + timedelta(days=i)
+                ).isoformat(),
                 "player": "Test Player",
                 "market": "shots",
                 "line": "2.5",
@@ -52,18 +54,26 @@ class TestWalkForwardBacktest(unittest.TestCase):
         result = run_backtest(self.rows)
 
         self.assertIsNotNone(result["metrics"])
-        self.assertGreaterEqual(
-            result["metrics"]["brier_score"], 0
-        )
-        self.assertGreaterEqual(
-            result["metrics"]["log_loss"], 0
-        )
-        self.assertGreaterEqual(
-            result["metrics"]["accuracy"], 0
-        )
-        self.assertLessEqual(
-            result["metrics"]["accuracy"], 1
-        )
+        self.assertGreaterEqual(result["metrics"]["brier_score"], 0)
+        self.assertGreaterEqual(result["metrics"]["log_loss"], 0)
+        self.assertGreaterEqual(result["metrics"]["accuracy"], 0)
+        self.assertLessEqual(result["metrics"]["accuracy"], 1)
+
+    def test_timezone_is_required(self):
+        rows = [row.copy() for row in self.rows]
+        rows[0]["game_datetime"] = "2025-01-01T12:00:00"
+
+        with self.assertRaises(ValueError):
+            run_backtest(rows)
+
+    def test_same_day_games_are_ordered_by_time(self):
+        rows = [row.copy() for row in self.rows]
+        rows[0]["game_datetime"] = "2025-01-01T10:00:00+00:00"
+        rows[1]["game_datetime"] = "2025-01-01T11:00:00+00:00"
+
+        result = run_backtest(rows)
+
+        self.assertEqual(result["evaluated"], 1)
 
 
 if __name__ == "__main__":
