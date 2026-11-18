@@ -1,5 +1,4 @@
-
-name: Collect NHL Player Game Logs
+name: Collect and Backtest NHL SOG Players
 
 on:
   workflow_dispatch:
@@ -8,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  collect:
+  collect-and-backtest:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,16 +19,85 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Collect Connor McDavid game logs
-        run: |
-          python -m src.nhl_game_logs \
-            --player-id 8478402 \
-            --seasons 20222023 20232024 20242025 20252026 20262027
+      - name: Run calculation and data tests
+        run: python -m unittest discover -s tests -v
 
-      - name: Save NHL game logs
+      - name: Collect NHL player game logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data/nhl_player_game_logs
+
+          players=(
+            "8478402:Connor_McDavid"
+            "8477934:Leon_Draisaitl"
+            "8479318:Auston_Matthews"
+            "8477492:Nathan_MacKinnon"
+            "8477956:David_Pastrnak"
+            "8476453:Nikita_Kucherov"
+            "8478420:Mikko_Rantanen"
+            "8480069:Cale_Makar"
+          )
+
+          for player in "${players[@]}"; do
+            IFS=":" read -r player_id player_slug <<< "$player"
+            echo "Collecting $player_slug ($player_id)"
+            python -m src.nhl_game_logs \
+              --player-id "$player_id" \
+              --seasons 20222023 20232024 20242025 20252026 20262027 \
+              --output "data/nhl_player_game_logs/$player_slug.csv"
+          done
+
+      - name: Combine player logs
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+
+          files = sorted(Path("data/nhl_player_game_logs").glob("*.csv"))
+          if len(files) != 8:
+              raise SystemExit(f"Expected 8 player files; found {len(files)}")
+
+          output = Path("data/nhl_player_game_logs_multi.csv")
+          rows = []
+          fieldnames = None
+          for path in files:
+              with path.open(newline="", encoding="utf-8") as source:
+                  reader = csv.DictReader(source)
+                  if fieldnames is None:
+                      fieldnames = reader.fieldnames
+                  rows.extend(reader)
+
+          players = sorted({row["player"] for row in rows})
+          if len(players) != 8:
+              raise SystemExit(
+                  f"Expected 8 distinct players; found {len(players)}: {players}"
+              )
+          if not rows:
+              raise SystemExit("NHL API returned no player game records")
+
+          with output.open("w", newline="", encoding="utf-8") as target:
+              writer = csv.DictWriter(target, fieldnames=fieldnames)
+              writer.writeheader()
+              writer.writerows(rows)
+
+          print(f"Combined {len(rows)} games for {len(players)} players")
+          print("Players:", ", ".join(players))
+          PY
+
+      - name: Run multi-player SOG walk-forward backtest
+        run: |
+          python -m src.nhl_sog_multi_backtest \
+            data/nhl_player_game_logs_multi.csv \
+            --min-observations 20 \
+            --half-life 10 \
+            --output-dir reports/nhl_sog
+
+      - name: Save NHL SOG backtest artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: nhl-player-game-logs
-          path: data/nhl_player_game_logs.csv
-          retention-days: 7
-          
+          name: nhl-sog-multi-player-backtest
+          path: |
+            data/nhl_player_game_logs_multi.csv
+            reports/nhl_sog/
+          retention-days: 14
