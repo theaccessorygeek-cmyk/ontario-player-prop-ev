@@ -93,6 +93,14 @@ jobs:
             --half-life 10 \
             --output-dir reports/nhl_sog
 
+      - name: Calculate NHL SOG market probabilities and EV
+        run: |
+          python -m src.nhl_sog_market_ev \
+            data/nhl_player_game_logs_multi.csv \
+            data/nhl_sog_market_template.csv \
+            --half-life 10 \
+            --output reports/nhl_sog/nhl_sog_market_ev.csv
+
       - name: Save NHL SOG backtest artifacts
         uses: actions/upload-artifact@v6
         with:
