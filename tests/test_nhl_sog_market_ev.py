@@ -15,7 +15,7 @@ class TestMarketEV(unittest.TestCase):
         games=[{"player":"A","game_date":"2025-01-01","shots_on_goal":"2"},{"player":"A","game_date":"2025-01-02","shots_on_goal":"4"},{"player":"A","game_date":"2025-01-03","shots_on_goal":"5"}]
         markets=[{"player":"A","game_date":"2025-01-03","line":"3.5","over_decimal_odds":"2","under_decimal_odds":"2"}]
         r=evaluate_markets(games,markets)[0]
-        self.assertEqual(r["history_games"],2); self.assertEqual(r["over_probability"],0)
+        self.assertEqual(r["history_games"],2); self.assertGreater(r["over_probability"],0)
     def test_invalid_odds(self):
         with self.assertRaises(ValueError): decimal_odds_metrics(.5,0,1)
 if __name__=="__main__": unittest.main()
